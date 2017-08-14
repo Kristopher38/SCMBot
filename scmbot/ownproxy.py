@@ -1,5 +1,7 @@
 from .proxyfinder import ProxyFinder
 from scrapy import signals
+from proxybroker import Proxy
+from .proxy import ProxyExtended
 import random
 import pdb
 import logging
@@ -8,10 +10,13 @@ logger = logging.getLogger(__name__)
 
 class OwnProxy(object):
 	def __init__(self, crawler):
-		self.finder = ProxyFinder(types=[('HTTP', ('Anonymous', 'High'))], limit=25)
-		self.proxies = self.finder.proxies
 		self.init_proxies = crawler.settings.get('MIN_PROXY_INIT', 10)
 		self.max_errors = crawler.settings.get('MAX_PROXY_ERRORS', 3)
+		self.limit = crawler.settings.get('PROXY_LIMIT', 25)
+		self.proxy_types = crawler.settings.get('PROXY_TYPES', ['HTTP'])
+		self.finder = ProxyFinder(types=self.proxy_types, limit=self.limit)
+		self.proxies = self.finder.proxies
+		self.priority_adjust = -5
 		
 	@classmethod
 	def from_crawler(cls, crawler):
@@ -22,7 +27,6 @@ class OwnProxy(object):
 		
 	def process_request(self, request, spider):
 		random_proxy = self._get_random_proxy()
-		#logger.debug("Chosen proxy is %s:%s" % (random_proxy.host, random_proxy.port))
 		random_proxy.stat['requests'] += 1
 		request.meta['proxy'] = "http://%s:%s" % (random_proxy.host, random_proxy.port)
 		request.meta['proxy_obj'] = random_proxy
@@ -31,9 +35,10 @@ class OwnProxy(object):
 		if 'proxy_obj' in request.meta:
 			proxy = request.meta['proxy_obj']
 			proxy._runtimes.append(request.meta['download_latency'])
-			if response.status is not 200:
-				proxy.stat['errors'][response.status] += 1
-				if response.status is 407:	# Proxy authentication required
+			proxy.stat['status'][response.status] += 1
+			if response.status != 200:
+				if response.status == 407:	# Proxy authentication required
+					pdb.set_trace()
 					logger.debug("Removing proxy requring authentication %s", proxy)
 					self.proxies.remove(proxy)
 		return response
@@ -41,15 +46,10 @@ class OwnProxy(object):
 	def process_exception(self, request, exception, spider):
 		if 'proxy_obj' in request.meta:
 			proxy = request.meta['proxy_obj']
-			proxy.stat['errors'][exception.__str__()] += 1
+			proxy.stat['errors'][exception.__class__] += 1
 			if sum(proxy.stat['errors'].values()) >= self.max_errors and self.proxies.count(proxy) > 0:
 				logger.debug("Removing proxy exceeding max error count %s", proxy)
 				self.proxies.remove(proxy)
-			random_proxy = self._get_random_proxy()
-			random_proxy.stat['requests'] += 1
-			#logger.debug("Chosen proxy is %s:%s" % (random_proxy.host, random_proxy.port))
-			request.meta['proxy'] = "http://%s:%s" % (random_proxy.host, random_proxy.port)
-			request.meta['proxy_obj'] = random_proxy
 		
 	def spider_opened(self, spider):
 		self.finder.start()
@@ -64,5 +64,11 @@ class OwnProxy(object):
 		
 	def _get_random_proxy(self):
 		self.finder.update_proxies()
-		newlist = sorted(self.proxies, key=lambda x: x.stat['requests'], reverse=False)
-		return newlist[0]
+		if len(self.proxies) > 0:
+			for i, proxy in enumerate(self.proxies):
+				if not isinstance(proxy, ProxyExtended):
+					self.proxies[i] = ProxyExtended(proxy)
+			newlist = sorted(self.proxies, key=lambda x: x.stat['requests'], reverse=False)
+			return newlist[0]
+		else:
+			raise RuntimeError("No proxies left in the proxy pool")

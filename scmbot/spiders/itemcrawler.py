@@ -12,16 +12,21 @@ class ItemcrawlerSpider(scrapy.Spider):
 	
 	allowed_domains = ['steamcommunity.com']
 	custom_settings = {
-		'RETRY_HTTP_CODES': [500, 503, 504, 400, 403, 404, 407, 408, 429],
+		'RETRY_HTTP_CODES': [400, 403, 404, 407, 408, 429, 500, 502, 503, 504],
 		'RETRY_TIMES': 10,
 		'DOWNLOADER_MIDDLEWARES': {
 			'scmbot.ownproxy.OwnProxy': 555,
 			'scrapy_fake_useragent.middleware.RandomUserAgentMiddleware': 556,
-			'scrapy.downloadermiddlewares.useragent.UserAgentMiddleware': None
+			'scrapy.downloadermiddlewares.useragent.UserAgentMiddleware': None,
+			'scrapy.downloadermiddlewares.robotstxt.RobotsTxtMiddleware': None
 		},
 		'USER_AGENT': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.87 Safari/537.36',
 		'DOWNLOAD_TIMEOUT': 15,
-		'RANDOM_UA_PER_PROXY': True
+		'RANDOM_UA_PER_PROXY': True,
+		'PROXY_LIMIT': 25,
+		'MIN_PROXY_INIT': 10,
+		'PROXY_TYPES': [('HTTP', ('Anonymous', 'High'))],
+		'SCHEDULER_DEBUG': True
 		#'CONCURRENT_REQUESTS': 1,
 		#'DOWNLOAD_DELAY': 1.5
 	}
@@ -44,7 +49,7 @@ class ItemcrawlerSpider(scrapy.Spider):
 	# TODO: Refactor requests so parameters aren't hardcoded (todo: appid passing from appid in start_requests to appid in parse_search so it doesn't trigger internal server error)
 	
 	def start_requests(self):
-		url = self.links['search'].format(query="trading card", start="0", count="10", sort_column="quantity", sort_dir="desc", appid="753")
+		url = self.links['search'].format(query="trading card", start="0", count="100", sort_column="quantity", sort_dir="desc", appid="753")
 		yield scrapy.Request(url=url, callback=self.parse_search)
 
 	def parse_search(self, response):
@@ -60,15 +65,17 @@ class ItemcrawlerSpider(scrapy.Spider):
 		if self.is_json(response.text):
 			data = json.loads(response.text)
 			if data['success']:
-				if int(data['volume'].replace(",","")) >= self.volume_threshold:
+				data['volume'] = int(data['volume'].replace(",",""))
+				if int(data['volume']) >= self.volume_threshold:
 					meta = {'volume': data['volume']}
 					yield scrapy.Request(url=response.meta['item_url'], callback=self.parse_item, meta=meta)
 			else:
 				yield response.request.copy()
 		
 	def parse_item(self, response):
-		if self.is_json(response.text):
-			chart_data = json.loads(re.search(self.regexps['listings'], response.text).group(1))
+		chart_data_string = re.search(self.regexps['listings'], response.text).group(1)
+		if self.is_json(chart_data_string):
+			chart_data = json.loads(chart_data_string)
 			for i, entry in enumerate(chart_data):
 				date, price, quantity = entry
 				datetime_object = datetime.strptime(date, "%b %d %Y %H: +0")
@@ -81,7 +88,7 @@ class ItemcrawlerSpider(scrapy.Spider):
 		
 	def is_json(self, text):
 		try:
-			json_obj = json_loads(text)
+			json_obj = json.loads(text)
 		except ValueError:
 			self.logger.error("Text is not a valid json: %s", text)
 			return False
