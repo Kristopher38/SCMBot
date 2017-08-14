@@ -3,7 +3,6 @@ import scrapy
 import json
 import re
 from datetime import datetime
-import matplotlib.pyplot as plt
 from . import fees
 import pdb
 
