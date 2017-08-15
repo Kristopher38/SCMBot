@@ -26,7 +26,7 @@ class ItemcrawlerSpider(scrapy.Spider):
 		'MIN_PROXY_INIT': 25,
 		'PROXY_TYPES': [('HTTP', ('Anonymous', 'High'))],
 		'SCHEDULER_DEBUG': True,
-		'CONCURRENT_REQUESTS': 16
+		'CONCURRENT_REQUESTS': 50
 		#'DOWNLOAD_DELAY': 1.5
 	}
 	
