@@ -38,7 +38,7 @@ class OwnProxy(object):
 			proxy._runtimes.append(request.meta['download_latency'])
 			proxy.stat['status'][response.status] += 1
 			if response.status != 200:
-				if response.status in [407] and self.proxies.count(proxy) > 0:	# Proxy authentication required
+				if response.status == 407 and self.proxies.count(proxy) > 0:	# Proxy authentication required
 					logger.debug("Removing proxy requring authentication %s", proxy)
 					self.proxies.remove(proxy)
 				logger.debug("(Failed request) Proxy used for %s was %s", request.url, request.meta['proxy'])
