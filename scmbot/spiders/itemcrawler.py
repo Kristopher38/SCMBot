@@ -22,11 +22,11 @@ class ItemcrawlerSpider(scrapy.Spider):
 		'USER_AGENT': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.87 Safari/537.36',
 		'DOWNLOAD_TIMEOUT': 15,
 		'RANDOM_UA_PER_PROXY': True,
-		'PROXY_LIMIT': 25,
-		'MIN_PROXY_INIT': 10,
+		'PROXY_LIMIT': 100,
+		'MIN_PROXY_INIT': 25,
 		'PROXY_TYPES': [('HTTP', ('Anonymous', 'High'))],
-		'SCHEDULER_DEBUG': True
-		#'CONCURRENT_REQUESTS': 1,
+		'SCHEDULER_DEBUG': True,
+		'CONCURRENT_REQUESTS': 16
 		#'DOWNLOAD_DELAY': 1.5
 	}
 	
@@ -48,8 +48,9 @@ class ItemcrawlerSpider(scrapy.Spider):
 	# TODO: Refactor requests so parameters aren't hardcoded (todo: appid passing from appid in start_requests to appid in parse_search so it doesn't trigger internal server error)
 	
 	def start_requests(self):
-		url = self.links['search'].format(query="trading card", start="0", count="100", sort_column="quantity", sort_dir="desc", appid="753")
-		yield scrapy.Request(url=url, callback=self.parse_search)
+		for i in range(0, 1000, 100)
+			url = self.links['search'].format(query="trading card", start=str(i), count=str(i+100), sort_column="quantity", sort_dir="desc", appid="753")
+			yield scrapy.Request(url=url, callback=self.parse_search)
 
 	def parse_search(self, response):
 		if self.is_json(response.text):
