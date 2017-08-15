@@ -2,6 +2,7 @@ from .proxyfinder import ProxyFinder
 from scrapy import signals
 from proxybroker import Proxy
 from .proxy import ProxyExtended
+from datetime import datetime, timedelta
 import random
 import pdb
 import logging
@@ -14,9 +15,9 @@ class OwnProxy(object):
 		self.max_errors = crawler.settings.get('MAX_PROXY_ERRORS', 3)
 		self.limit = crawler.settings.get('PROXY_LIMIT', 25)
 		self.proxy_types = crawler.settings.get('PROXY_TYPES', ['HTTP'])
+		self.hold_time = crawler.settings.get('PROXY_HOLD_TIME', 30)
 		self.finder = ProxyFinder(types=self.proxy_types, limit=self.limit)
 		self.proxies = self.finder.proxies
-		self.priority_adjust = -5
 		
 	@classmethod
 	def from_crawler(cls, crawler):
@@ -30,6 +31,8 @@ class OwnProxy(object):
 		random_proxy.stat['requests'] += 1
 		request.meta['proxy'] = "http://%s:%s" % (random_proxy.host, random_proxy.port)
 		request.meta['proxy_obj'] = random_proxy
+		# if 'retrydebug' in request.meta:
+			# logger.debug("Using proxy %s for request %s", random_proxy, request.url)
 			
 	def process_response(self, request, response, spider):
 		if 'proxy_obj' in request.meta:
@@ -37,10 +40,14 @@ class OwnProxy(object):
 			proxy._runtimes.append(request.meta['download_latency'])
 			proxy.stat['status'][response.status] += 1
 			if response.status != 200:
-				if response.status == 407:	# Proxy authentication required
-					pdb.set_trace()
+				if response.status in [407] and self.proxies.count(proxy) > 0:	# Proxy authentication required
 					logger.debug("Removing proxy requring authentication %s", proxy)
 					self.proxies.remove(proxy)
+				logger.debug("(Failed request) Proxy used for %s was %s", request.url, request.meta['proxy'])
+				if response.status == 429:
+					proxy.hold_until = datetime.now() + timedelta(seconds=self.hold_time)
+			else:
+				logger.debug("Proxy used for %s was %s", request.url, request.meta['proxy'])
 		return response
 	
 	def process_exception(self, request, exception, spider):
@@ -68,7 +75,11 @@ class OwnProxy(object):
 			for i, proxy in enumerate(self.proxies):
 				if not isinstance(proxy, ProxyExtended):
 					self.proxies[i] = ProxyExtended(proxy)
-			newlist = sorted(self.proxies, key=lambda x: x.stat['requests'], reverse=False)
-			return newlist[0]
+			newlist = sorted(self.proxies, key=lambda x: x.last_used, reverse=False)
+			for proxy in newlist:
+				if proxy.hold_until < datetime.now():	# if we're past the point of holding
+					proxy.last_used = datetime.now()
+					return proxy
+			
 		else:
 			raise RuntimeError("No proxies left in the proxy pool")
