@@ -42,9 +42,9 @@ class ItemcrawlerSpider(scrapy.Spider):
 	volume_threshold = 0
 	days_to_calc_extrema = 10
 	profit_threshold = -9999999
+	price_perc_threshold = -999999
 	
 	# TODO: Subclassed proxybroker with ability to queue jobs for grabbing proxies, pausing grabbing when done job, and queues in ProxyFinder to allow for that
-	# TODO: Improve proxy selection algorithm to faciliate response time (or maybe not??)
 	# TODO: Refactor requests so parameters aren't hardcoded (todo: appid passing from appid in start_requests to appid in parse_search so it doesn't trigger internal server error)
 	
 	def start_requests(self):
@@ -73,18 +73,22 @@ class ItemcrawlerSpider(scrapy.Spider):
 				yield response.request.copy()
 		
 	def parse_item(self, response):
-		chart_data_string = re.search(self.regexps['listings'], response.text).group(1)
-		if self.is_json(chart_data_string):
-			chart_data = json.loads(chart_data_string)
-			for i, entry in enumerate(chart_data):
-				date, price, quantity = entry
-				datetime_object = datetime.strptime(date, "%b %d %Y %H: +0")
-				quantity_int = int(quantity)
-				chart_data[i] = [datetime_object, price, quantity_int]
-			processed_chart_data = self.process_chart(chart_data)
-			if processed_chart_data:
-				processed_chart_data.update({'url': response.url, 'volume': response.meta['volume']})
-				yield processed_chart_data
+		try:
+			chart_data_string = re.search(self.regexps['listings'], response.text).group(1)
+		except AttributeError:
+			self.logger.error("Failed to get chart data when parsing listings, response.text: %s", response.text)
+		else:
+			if self.is_json(chart_data_string):
+				chart_data = json.loads(chart_data_string)
+				for i, entry in enumerate(chart_data):
+					date, price, quantity = entry
+					datetime_object = datetime.strptime(date, "%b %d %Y %H: +0")
+					quantity_int = int(quantity)
+					chart_data[i] = [datetime_object, price, quantity_int]
+				processed_chart_data = self.process_chart(chart_data)
+				if processed_chart_data:
+					processed_chart_data.update({'url': response.url, 'volume': response.meta['volume']})
+					yield processed_chart_data
 		
 	def is_json(self, text):
 		try:
@@ -150,9 +154,11 @@ class ItemcrawlerSpider(scrapy.Spider):
 		i_get_sell = max_price - fee['fees']
 		
 		expected_profit = i_get_sell - min_price 
-		if expected_profit >= self.profit_threshold:
+		price_perc = round(float(expected_profit)/float(min_price)*1000)/1000
+		
+		if expected_profit >= self.profit_threshold and price_perc >= self.price_perc_threshold:
 			return {
-				"price_perc": round(float(expected_profit)/float(min_price)*1000)/1000, 
+				"price_perc": price_perc, 
 				"avg_min": avg_min, 
 				"avg_max": avg_max, 
 				"sell_price_fee": max_price,

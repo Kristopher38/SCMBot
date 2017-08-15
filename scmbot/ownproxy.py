@@ -31,8 +31,6 @@ class OwnProxy(object):
 		random_proxy.stat['requests'] += 1
 		request.meta['proxy'] = "http://%s:%s" % (random_proxy.host, random_proxy.port)
 		request.meta['proxy_obj'] = random_proxy
-		# if 'retrydebug' in request.meta:
-			# logger.debug("Using proxy %s for request %s", random_proxy, request.url)
 			
 	def process_response(self, request, response, spider):
 		if 'proxy_obj' in request.meta:
@@ -45,6 +43,7 @@ class OwnProxy(object):
 					self.proxies.remove(proxy)
 				logger.debug("(Failed request) Proxy used for %s was %s", request.url, request.meta['proxy'])
 				if response.status == 429:
+					logger.debug("Putting proxy %s on hold for %s seconds", proxy, str(self.hold_time))
 					proxy.hold_until = datetime.now() + timedelta(seconds=self.hold_time)
 			else:
 				logger.debug("Proxy used for %s was %s", request.url, request.meta['proxy'])
@@ -77,9 +76,10 @@ class OwnProxy(object):
 					self.proxies[i] = ProxyExtended(proxy)
 			newlist = sorted(self.proxies, key=lambda x: x.last_used, reverse=False)
 			for proxy in newlist:
-				if proxy.hold_until < datetime.now():	# if we're past the point of holding
+				if proxy.hold_until < datetime.now():	# allow only if we're past the point in time till holding
 					proxy.last_used = datetime.now()
 					return proxy
-			
+			else:
+				raise RuntimeError("All proxies are on hold")
 		else:
 			raise RuntimeError("No proxies left in the proxy pool")
