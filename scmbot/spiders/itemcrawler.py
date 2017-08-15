@@ -48,7 +48,7 @@ class ItemcrawlerSpider(scrapy.Spider):
 	# TODO: Refactor requests so parameters aren't hardcoded (todo: appid passing from appid in start_requests to appid in parse_search so it doesn't trigger internal server error)
 	
 	def start_requests(self):
-		for i in range(0, 1000, 100)
+		for i in range(0, 1000, 100):
 			url = self.links['search'].format(query="trading card", start=str(i), count=str(i+100), sort_column="quantity", sort_dir="desc", appid="753")
 			yield scrapy.Request(url=url, callback=self.parse_search)
 
