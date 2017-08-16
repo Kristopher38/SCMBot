@@ -16,6 +16,7 @@ class OwnProxy(object):
 		self.limit = crawler.settings.get('PROXY_LIMIT', 25)
 		self.proxy_types = crawler.settings.get('PROXY_TYPES', ['HTTP'])
 		self.hold_time = crawler.settings.get('PROXY_HOLD_TIME', 30)
+		self.min_hold_time = crawler.settings.get('MIN_PROXY_HOLD_TIME', 2)
 		self.finder = ProxyFinder(types=self.proxy_types, limit=self.limit)
 		self.proxies = self.finder.proxies
 		
@@ -46,7 +47,9 @@ class OwnProxy(object):
 					logger.debug("Putting proxy %s on hold for %s seconds", proxy, str(self.hold_time))
 					proxy.hold_until = datetime.now() + timedelta(seconds=self.hold_time)
 			else:
+				proxy.hold_until = datetime.now() + timedelta(seconds=self.min_hold_time)
 				logger.debug("Proxy used for %s was %s", request.url, request.meta['proxy'])
+			proxy.in_use = False
 		return response
 	
 	def process_exception(self, request, exception, spider):
@@ -56,6 +59,7 @@ class OwnProxy(object):
 			if sum(proxy.stat['errors'].values()) >= self.max_errors and self.proxies.count(proxy) > 0:
 				logger.debug("Removing proxy exceeding max error count %s", proxy)
 				self.proxies.remove(proxy)
+			proxy.in_use = False
 		
 	def spider_opened(self, spider):
 		self.finder.start()
@@ -70,15 +74,18 @@ class OwnProxy(object):
 		
 	def _get_random_proxy(self):
 		self.finder.update_proxies()
+		
 		if len(self.proxies) > 0:
 			for i, proxy in enumerate(self.proxies):
 				if not isinstance(proxy, ProxyExtended):
 					self.proxies[i] = ProxyExtended(proxy)
-			newlist = sorted(self.proxies, key=lambda x: x.last_used, reverse=False)
-			for proxy in newlist:
-				if proxy.hold_until < datetime.now():	# allow only if we're past the point in time till holding
-					proxy.last_used = datetime.now()
-					return proxy
+			
+			now = datetime.now()
+			self.proxies = sorted(self.proxies, key=lambda x: x.avg_resp_time, reverse=False)
+			for proxy in filter(lambda x: x.hold_until < now and x.in_use == False, self.proxies): # allow only if past time of holding to
+				proxy.last_used = now
+				proxy.in_use = True
+				return proxy
 			else:
 				raise RuntimeError("All proxies are on hold")
 		else:

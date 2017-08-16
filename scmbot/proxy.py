@@ -9,4 +9,5 @@ class ProxyExtended(Proxy):
 		self.stat['status'] = Counter()
 		self.last_used = datetime.min
 		self.hold_until = datetime.min
+		self.in_use = False
 		
