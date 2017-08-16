@@ -19,15 +19,13 @@ class ItemcrawlerSpider(scrapy.Spider):
 			'scrapy.downloadermiddlewares.useragent.UserAgentMiddleware': None,
 			'scrapy.downloadermiddlewares.robotstxt.RobotsTxtMiddleware': None
 		},
-		'USER_AGENT': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.87 Safari/537.36',
 		'DOWNLOAD_TIMEOUT': 15,
 		'RANDOM_UA_PER_PROXY': True,
-		'PROXY_LIMIT': 100,
+		'PROXY_LIMIT': 0,
 		'MIN_PROXY_INIT': 25,
+		'PROXY_HOLD_TIME': 60,
 		'PROXY_TYPES': [('HTTP', ('Anonymous', 'High'))],
-		'SCHEDULER_DEBUG': True,
-		'CONCURRENT_REQUESTS': 50
-		#'DOWNLOAD_DELAY': 1.5
+		'CONCURRENT_REQUESTS': 200
 	}
 	
 	links = {
