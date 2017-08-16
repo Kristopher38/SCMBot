@@ -22,7 +22,7 @@ class ItemcrawlerSpider(scrapy.Spider):
 		'DOWNLOAD_TIMEOUT': 15,
 		'RANDOM_UA_PER_PROXY': True,
 		'PROXY_LIMIT': 500,
-		'MIN_PROXY_INIT': 50,
+		'MIN_PROXY_INIT': 100,
 		'PROXY_HOLD_TIME': 60,
 		'PROXY_TYPES': [('HTTP', ('Anonymous', 'High'))],
 		'CONCURRENT_REQUESTS': 50
